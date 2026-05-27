@@ -1,23 +1,22 @@
 const express = require("express");
 const mongoose = require("mongoose");
 const cors = require("cors");
-const dns = require("dns");
 require("dotenv").config();
-
-dns.setDefaultResultOrder("ipv4first");
 
 const app = express();
 const PORT = process.env.PORT || 3001;
-const MONGODB_URI = process.env.MONGODB_URI;
 
+// Middleware
 app.use(cors());
 app.use(express.json());
 
+// Kết nối MongoDB
 mongoose
-  .connect(MONGODB_URI)
+  .connect(process.env.MONGO_URI)
   .then(() => console.log("Connected to MongoDB"))
-  .catch((err) => console.error("MongoDB Error:", err.message));
+  .catch((err) => console.error("MongoDB Error:", err));
 
+// Schema và Model
 const UserSchema = new mongoose.Schema(
   {
     name: {
@@ -54,35 +53,61 @@ const UserSchema = new mongoose.Schema(
 
 const User = mongoose.model("User", UserSchema);
 
+// Chuẩn hoá dữ liệu gửi lên
 function normalizeBody(body) {
   const data = {};
 
-  if (body.name !== undefined) data.name = String(body.name).trim();
-  if (body.email !== undefined) data.email = String(body.email).trim().toLowerCase();
-  if (body.address !== undefined) data.address = String(body.address).trim();
-  if (body.age !== undefined && body.age !== "") data.age = Number(body.age);
+  if (body.name !== undefined) {
+    data.name = String(body.name).trim();
+  }
+
+  if (body.email !== undefined) {
+    data.email = String(body.email).trim().toLowerCase();
+  }
+
+  if (body.address !== undefined) {
+    data.address = String(body.address).trim();
+  }
+
+  if (body.age !== undefined && body.age !== "") {
+    data.age = Number(body.age);
+  }
 
   return data;
 }
 
+// Xử lý thông báo lỗi
 function buildErrorMessage(err) {
-  if (err.code === 11000) return "Email đã tồn tại";
-  if (err.name === "CastError") return "ID không hợp lệ";
+  if (err.code === 11000) {
+    return "Email đã tồn tại";
+  }
+
+  if (err.name === "CastError") {
+    return "ID không hợp lệ";
+  }
+
   return err.message;
 }
 
+// Kiểm tra server có đang chạy không
 app.get("/", (req, res) => {
   res.json({ message: "User Management API is running" });
 });
 
+// Lấy danh sách người dùng
 app.get("/api/users", async (req, res) => {
   try {
     let page = parseInt(req.query.page, 10) || 1;
     let limit = parseInt(req.query.limit, 10) || 5;
     const search = (req.query.search || "").trim();
 
-    if (page < 1) page = 1;
-    if (![3, 5, 10].includes(limit)) limit = 5;
+    if (page < 1) {
+      page = 1;
+    }
+
+    if (![3, 5, 10].includes(limit)) {
+      limit = 5;
+    }
 
     const filter = search
       ? {
@@ -103,19 +128,31 @@ app.get("/api/users", async (req, res) => {
 
     const totalPages = Math.ceil(total / limit) || 1;
 
-    res.json({ page, limit, total, totalPages, data: users });
+    res.json({
+      page,
+      limit,
+      total,
+      totalPages,
+      data: users,
+    });
   } catch (err) {
-    res.status(500).json({ error: buildErrorMessage(err) });
+    res.status(500).json({
+      error: buildErrorMessage(err),
+    });
   }
 });
 
+// Thêm người dùng mới
 app.post("/api/users", async (req, res) => {
   try {
     const data = normalizeBody(req.body);
 
     const existingUser = await User.findOne({ email: data.email });
+
     if (existingUser) {
-      return res.status(400).json({ error: "Email đã tồn tại" });
+      return res.status(400).json({
+        error: "Email đã tồn tại",
+      });
     }
 
     const newUser = await User.create(data);
@@ -125,16 +162,21 @@ app.post("/api/users", async (req, res) => {
       data: newUser,
     });
   } catch (err) {
-    res.status(400).json({ error: buildErrorMessage(err) });
+    res.status(400).json({
+      error: buildErrorMessage(err),
+    });
   }
 });
 
+// Cập nhật người dùng
 app.put("/api/users/:id", async (req, res) => {
   try {
     const { id } = req.params;
 
     if (!mongoose.Types.ObjectId.isValid(id)) {
-      return res.status(400).json({ error: "ID không hợp lệ" });
+      return res.status(400).json({
+        error: "ID không hợp lệ",
+      });
     }
 
     const data = normalizeBody(req.body);
@@ -145,7 +187,9 @@ app.put("/api/users/:id", async (req, res) => {
     });
 
     if (!updatedUser) {
-      return res.status(404).json({ error: "Không tìm thấy người dùng" });
+      return res.status(404).json({
+        error: "Không tìm thấy người dùng",
+      });
     }
 
     res.json({
@@ -153,30 +197,42 @@ app.put("/api/users/:id", async (req, res) => {
       data: updatedUser,
     });
   } catch (err) {
-    res.status(400).json({ error: buildErrorMessage(err) });
+    res.status(400).json({
+      error: buildErrorMessage(err),
+    });
   }
 });
 
+// Xoá người dùng
 app.delete("/api/users/:id", async (req, res) => {
   try {
     const { id } = req.params;
 
     if (!mongoose.Types.ObjectId.isValid(id)) {
-      return res.status(400).json({ error: "ID không hợp lệ" });
+      return res.status(400).json({
+        error: "ID không hợp lệ",
+      });
     }
 
     const deletedUser = await User.findByIdAndDelete(id);
 
     if (!deletedUser) {
-      return res.status(404).json({ error: "Không tìm thấy người dùng" });
+      return res.status(404).json({
+        error: "Không tìm thấy người dùng",
+      });
     }
 
-    res.json({ message: "Xóa người dùng thành công" });
+    res.json({
+      message: "Xóa người dùng thành công",
+    });
   } catch (err) {
-    res.status(400).json({ error: buildErrorMessage(err) });
+    res.status(400).json({
+      error: buildErrorMessage(err),
+    });
   }
 });
 
+// Chạy server
 app.listen(PORT, () => {
   console.log(`Server running on http://localhost:${PORT}`);
 });
